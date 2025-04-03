@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+model User {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  email         String   @unique
+  password      String
+  username      String   @unique
+  firstName     String
+  lastName      String
+  phoneNumber   String
+  avatar        String
+  role          Role     @default(CUSTOMER)
+  isEmailVerified      Boolean  @default(false)
+  verificationToken String?
+  passwordResetToken String?
+  passwordResetExpires DateTime?
+  refreshTokens     RefreshToken[]
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+}
+
+model RefreshToken {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  token         String   @unique
+  lookupHash    String   @unique
+  userId        String   @db.ObjectId
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family        String    // To track token lineage
+  used          Boolean   @default(false)
+  invalidated   Boolean   @default(false)
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  replacedBy    String?   // Reference to the next token in the chain
+  
+  // Optional: Add these fields for enhanced security
+  userAgent String?
+  ipAddress String?
+}
