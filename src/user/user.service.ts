@@ -61,16 +61,6 @@ export class UserService {
   async findAllCustomers() {
     return this.prisma.user.findMany({
       where: { role: 'CUSTOMER' },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        phoneNumber: true,
-        avatar: true,
-        role: true,
-      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -78,16 +68,6 @@ export class UserService {
   async findUserById(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        phoneNumber: true,
-        avatar: true,
-        role: true,
-      },
     });
 
     if (!user) {
@@ -104,16 +84,6 @@ export class UserService {
       const user = await this.prisma.user.update({
         where: { id },
         data: data,
-        select: {
-          id: true,
-          email: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          phoneNumber: true,
-          avatar: true,
-          role: true,
-        },
       });
       return user;
     } catch (e) {

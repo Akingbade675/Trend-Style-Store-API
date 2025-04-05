@@ -6,6 +6,9 @@ import {
   Param,
   Delete,
   UseGuards,
+  UseInterceptors,
+  ClassSerializerInterceptor,
+  SerializeOptions,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -16,8 +19,11 @@ import { RolesGuard } from 'src/common/guards/role.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { Role } from 'src/common/enums/roles-enum';
 import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
+import { UserEntity } from './entities/user.entity';
 
 @Public(false)
+@UseInterceptors(ClassSerializerInterceptor)
+@SerializeOptions({ type: UserEntity })
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -28,8 +34,8 @@ export class UserController {
   async update(
     @CurrentUser() user: UserWithoutPassword,
     @Body() updateUserDto: UpdateUserDto,
-  ) {
-    return this.userService.update(user.id, updateUserDto);
+  ): Promise<UserEntity> {
+    return await this.userService.update(user.id, updateUserDto);
   }
 
   // --- Admin Endpoints ---
@@ -37,7 +43,7 @@ export class UserController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @Get('customers')
-  async getAllCustomers() {
+  async getAllCustomers(): Promise<UserEntity[]> {
     return this.userService.findAllCustomers();
   }
 
