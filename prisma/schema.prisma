@@ -18,24 +18,31 @@ enum Role {
   ADMIN
 }
 
+// --- User and Auth Related Models ---
+
 model User {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  email         String   @unique
-  password      String
-  username      String   @unique
-  firstName     String
-  lastName      String
-  phoneNumber   String
-  avatar        String
-  role          Role     @default(CUSTOMER)
-  isEmailVerified      Boolean  @default(false)
-  verificationToken String?
-  passwordResetToken String?
+  id                   String         @id @default(auto()) @map("_id") @db.ObjectId
+  email                String         @unique
+  password             String
+  username             String         @unique
+  firstName            String
+  lastName             String
+  phoneNumber          String?
+  role                 Role           @default(CUSTOMER)        
+  avatar               String?        // URL to avatar image
+  isEmailVerified      Boolean        @default(false)
+  verificationToken    String?        
+  passwordResetToken   String?        
   passwordResetExpires DateTime?
-  refreshTokens     RefreshToken[]
-  
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  orders               Order[]
+  reviews              UserReview[]
+  addresses            UserAddress[]
+  refreshTokens        RefreshToken[]
 }
 
 model RefreshToken {
@@ -55,3 +62,246 @@ model RefreshToken {
   userAgent String?
   ipAddress String?
 }
+
+model UserAddress {
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  addressLine1  String
+  addressLine2  String? 
+  phoneNumber   String? 
+  city          String
+  region        String? // State/Province
+  postalCode    String? 
+  isDefault     Boolean @default(false) 
+
+  userId        String  @db.ObjectId
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  countryId     String  @db.ObjectId
+  country       Country @relation(fields: [countryId], references: [id])
+
+  @@index([userId])
+  @@index([countryId])
+}
+
+model Country {
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  countryName   String  @unique
+
+  addresses     UserAddress[]
+}
+
+// --- Product Related Models ---
+
+model Category {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  name          String      @unique
+  imageUrl      String?
+  isFeatured    Boolean     @default(false)
+
+  // Self-relation for subcategories
+  parentId      String?     @db.ObjectId
+  parent        Category?   @relation("SubCategories", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children      Category[]  @relation("SubCategories")
+
+  // Relations
+  brands        BrandCategory[]
+  products      Product[]
+
+  @@index([parentId])
+}
+
+model Brand {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  name          String      @unique
+  logoUrl       String?
+  isFeatured    Boolean     @default(false)
+
+  // Relations
+  products      Product[]
+  categories    BrandCategory[]
+}
+
+model BrandCategory {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  brandId    String   @db.ObjectId
+  brand      Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  categoryId String   @db.ObjectId
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, categoryId]) // Ensure unique pairings
+  @@index([brandId])
+  @@index([categoryId])
+}
+
+model Product {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  slug          String      @unique
+  description   String?
+  originalPrice Float       // Original price before any discounts
+  salePrice     Float      // Current selling price
+  skuPrefix     String?
+  isFeatured    Boolean     @default(false)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  categoryId    String   @db.ObjectId
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  // Direct relationship to Brand (One-to-Many)
+  brandId       String   @db.ObjectId
+  brand         Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  // Relations
+  images        ProductImage[]
+  attributes    ProductAttribute[]
+  items         ProductItem[]
+
+  @@index([brandId])
+  @@index([name])
+}
+
+model ProductImage {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  imageUrl      String
+  isPrimary     Boolean     @default(false) // Indicates if this is the primary image for the product
+
+  productId     String      @db.ObjectId
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model AttributeType {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  name          String      @unique // e.g., "Color", "Size", "Material"
+  description   String?
+
+  // Relations
+  productAttributes ProductAttribute[]
+}
+
+model ProductAttribute {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  value         String      // e.g., "Red", "Large", "Cotton"
+
+  productId     String      @db.ObjectId
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  attributeTypeId String   @db.ObjectId
+  attributeType AttributeType @relation(fields: [attributeTypeId], references: [id], onDelete: Cascade)
+
+  // Relations
+  productItems ProductItemAttribute[]
+
+  @@unique([value, attributeTypeId, productId]) // Ensure a product doesn't have the same attribute value twice
+  @@index([productId])
+  @@index([attributeTypeId])
+}
+
+// Represents a specific stock-keeping unit (SKU) or variation of a Product
+model ProductItem {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  sku           String      @unique // Unique SKU for this item
+  stock         Int         @default(0)  // Available stock quantity
+  originalPrice Float       // Can override the product's base price
+  salePrice     Float       // Can override the product's sale price
+  isFeatured    Boolean     @default(false)
+  isActive      Boolean     @default(true)
+
+  productId     String      @db.ObjectId
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Relations
+  // images        ProductImage[] // Optional: If you want to have images specific to this item
+  orderItems    OrderItem[]
+  attributes    ProductItemAttribute[] // Join table for attributes
+}
+
+// Join table connecting a ProductItem to its specific ProductAttribute values
+// e.g., ProductItem (T-Shirt SKU #123) links to ProductAttribute ("Color: Red") and ProductAttribute ("Size: L")
+model ProductItemAttribute {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+
+  productItemId String      @db.ObjectId
+  productItem   ProductItem @relation(fields: [productItemId], references: [id], onDelete: Cascade)
+
+  productAttributeId String   @db.ObjectId
+  productArrribute ProductAttribute @relation(fields: [productAttributeId], references: [id], onDelete: Cascade)
+
+  // Relations
+
+  @@unique([productItemId, productAttributeId]) // Ensure a unique pairing
+  @@index([productItemId])
+  @@index([productAttributeId])
+}
+
+// --- Order Related Models ---
+
+model OrderStatus {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  name          String      @unique // e.g., "Pending", "Processing", "Shipped", "Delivered", "Cancelled", "Returned"
+  description   String?
+
+  // Relations
+  orders        Order[]
+}
+
+model Order {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  orderDate     DateTime    @default(now())
+  deliveryDate  DateTime?   // Estimated or actual delivery date
+  orderNumber   String      @unique // Unique order number
+  totalAmount   Float       // Total amount for the order
+  shippingAddress Json    // snapshot of the shipping address at the time of order
+
+  userId        String      @db.ObjectId
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  orderStatusId String      @db.ObjectId
+  orderStatus   OrderStatus @relation(fields: [orderStatusId], references: [id], onDelete: Cascade)
+
+  items         OrderItem[]
+
+  @@index([userId])
+  @@index([orderStatusId])
+}
+
+model OrderItem {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  quantity      Int         // Quantity of the product ordered
+  price         Float       // Price *at the time of order* (snapshot)
+  productName   String?     // Snapshot of the product name at the time of order
+  productImage  String?     // Snapshot of the product image at the time of order
+  productSku    String?     // Snapshot of the product SKU at the time of order
+
+  orderId       String      @db.ObjectId
+  order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productItemId String      @db.ObjectId
+  productItem   ProductItem @relation(fields: [productItemId], references: [id], onDelete: Restrict)
+
+  // Relations
+  review       UserReview? 
+  
+  @@index([orderId])
+  @@index([productItemId])
+}
+
+model UserReview {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  ratingValue   Int         // Rating value (1-5)
+  comment       String?     
+  reviewDate    DateTime    @default(now())
+
+  userId        String      @db.ObjectId
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  orderItemId   String      @db.ObjectId @unique // Ensure a user can only review an order item once
+  orderItem     OrderItem   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
