@@ -8,7 +8,7 @@ import { join } from 'path';
 @Module({
   imports: [
     NestMailerModule.forRootAsync({
-      imports: [ConfigModule], // Import ConfigModule to use ConfigService
+      imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         transport: {
           host: configService.get<string>('EMAIL_HOST'),

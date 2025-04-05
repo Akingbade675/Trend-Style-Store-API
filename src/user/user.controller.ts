@@ -1,32 +1,50 @@
 import {
   Controller,
   Get,
-  Post,
   Body,
   Patch,
   Param,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { Public } from 'src/common/decorators/public.decorator';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { UserWithoutPassword } from 'src/auth/auth.service';
+import { RolesGuard } from 'src/common/guards/role.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { Role } from 'src/common/enums/roles-enum';
+import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
 
+@Public(false)
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
+  // --- Public Endpoints ---
+
+  @Patch('profile')
+  async update(
+    @CurrentUser() user: UserWithoutPassword,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
+    return this.userService.update(user.id, updateUserDto);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(+id, updateUserDto);
+  // --- Admin Endpoints ---
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('customers')
+  async getAllCustomers() {
+    return this.userService.findAllCustomers();
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get(':id')
+  async getSpecificUser(@Param('id', ParseMongoIdPipe) id: string) {
+    return this.userService.findUserById(id);
   }
 }

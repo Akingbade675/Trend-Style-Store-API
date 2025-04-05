@@ -5,6 +5,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -57,11 +58,75 @@ export class UserService {
     return this.prisma.user.findUnique({ where });
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  async findAllCustomers() {
+    return this.prisma.user.findMany({
+      where: { role: 'CUSTOMER' },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        phoneNumber: true,
+        avatar: true,
+        role: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async findUserById(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        phoneNumber: true,
+        avatar: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    return user;
+  }
+
+  async update(id: string, data: UpdateUserDto) {
+    await this.findUserById(id); // Check if user exists
+
+    try {
+      const user = await this.prisma.user.update({
+        where: { id },
+        data: data,
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          phoneNumber: true,
+          avatar: true,
+          role: true,
+        },
+      });
+      return user;
+    } catch (e) {
+      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2002') {
+        if (e.meta.target.toString().includes('username')) {
+          throw new ConflictException('Username already exists!');
+        }
+      }
+      this.logger.error(
+        `Failed to update user with ID ${id}: ${e.message}`,
+        e.stack,
+      );
+      throw new InternalServerErrorException('Could not update user.');
+    }
   }
 }

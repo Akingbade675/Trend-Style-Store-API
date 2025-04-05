@@ -18,6 +18,10 @@ export class MailService {
   }
 
   private getFrontendUrl(): string {
+    console.log(
+      'Frontend URL from config: ',
+      this.configService.get<string>('FRONTEND_URL'),
+    );
     return (
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'
     );
