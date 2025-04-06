@@ -71,7 +71,10 @@ model UserAddress {
   city          String
   region        String? // State/Province
   postalCode    String? 
-  isDefault     Boolean @default(false) 
+  isDefault     Boolean @default(false)
+
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
 
   userId        String  @db.ObjectId
   user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -96,6 +99,7 @@ model Category {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
   name          String      @unique
   imageUrl      String?
+  description   String?
   isFeatured    Boolean     @default(false)
 
   // Self-relation for subcategories
@@ -113,6 +117,7 @@ model Category {
 model Brand {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
   name          String      @unique
+  description   String?
   logoUrl       String?
   isFeatured    Boolean     @default(false)
 
@@ -158,6 +163,7 @@ model Product {
   images        ProductImage[]
   attributes    ProductAttribute[]
   items         ProductItem[]
+  tags          ProductTag[]
 
   @@index([brandId])
   @@index([name])
@@ -166,12 +172,36 @@ model Product {
 model ProductImage {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
   imageUrl      String
+  altText       String?     // Alternative text for the image
   isPrimary     Boolean     @default(false) // Indicates if this is the primary image for the product
 
   productId     String      @db.ObjectId
   product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
+}
+
+model Tag {
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  name String @unique
+
+  // Relations
+  products ProductTag[]
+}
+
+// Join table for Product <-> Tag (Many-to-Many)
+model ProductTag {
+  id String @id @default(auto()) @map("_id") @db.ObjectId // Add primary key for Prisma
+
+  productId String  @db.ObjectId
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  tagId     String  @db.ObjectId
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, tagId])
+  @@index([productId])
+  @@index([tagId])
 }
 
 model AttributeType {
@@ -242,7 +272,7 @@ model ProductItemAttribute {
 
 model OrderStatus {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
-  name          String      @unique // e.g., "Pending", "Processing", "Shipped", "Delivered", "Cancelled", "Returned"
+  status          String    @unique // e.g., "Pending", "Processing", "Shipped", "Delivered", "Cancelled", "Returned"
   description   String?
 
   // Relations
@@ -255,7 +285,9 @@ model Order {
   deliveryDate  DateTime?   // Estimated or actual delivery date
   orderNumber   String      @unique // Unique order number
   totalAmount   Float       // Total amount for the order
-  shippingAddress Json    // snapshot of the shipping address at the time of order
+  paymentStatus String?     // e.g., "Paid", "Pending", "Failed"
+  transactionId  String?     // Reference to payment transaction ID
+  shippingAddress Json      // snapshot of the shipping address at the time of order
 
   userId        String      @db.ObjectId
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)

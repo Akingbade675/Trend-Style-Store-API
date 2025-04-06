@@ -8,6 +8,9 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  ClassSerializerInterceptor,
+  SerializeOptions,
 } from '@nestjs/common';
 import { AddressesService } from './addresses.service';
 import { CreateAddressDto } from './dto/create-address.dto';
@@ -15,23 +18,26 @@ import { UpdateAddressDto } from './dto/update-address.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
+import { AddressEntity } from './entities/address.entity';
 
 @Public(false)
+@UseInterceptors(ClassSerializerInterceptor)
+@SerializeOptions({ type: AddressEntity })
 @Controller('addresses')
 export class AddressesController {
   constructor(private readonly addressesService: AddressesService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(
+  async create(
     @Body() createAddressDto: CreateAddressDto,
     @CurrentUser('id') userId: string,
-  ) {
+  ): Promise<AddressEntity> {
     return this.addressesService.create(userId, createAddressDto);
   }
 
   @Get()
-  findAll(@CurrentUser('id') userId: string) {
+  findAll(@CurrentUser('id') userId: string): Promise<AddressEntity[]> {
     return this.addressesService.findAll(userId);
   }
 
@@ -39,7 +45,7 @@ export class AddressesController {
   findOne(
     @Param('id', ParseMongoIdPipe) id: string,
     @CurrentUser('id') userId: string,
-  ) {
+  ): Promise<AddressEntity> {
     return this.addressesService.findOne(id, userId);
   }
 
@@ -48,7 +54,7 @@ export class AddressesController {
     @Param('id', ParseMongoIdPipe) id: string,
     @Body() updateAddressDto: UpdateAddressDto,
     @CurrentUser('id') userId: string,
-  ) {
+  ): Promise<AddressEntity> {
     return this.addressesService.update(id, userId, updateAddressDto);
   }
 
@@ -56,7 +62,7 @@ export class AddressesController {
   setDefault(
     @Param('id', ParseMongoIdPipe) id: string,
     @CurrentUser('id') userId: string,
-  ) {
+  ): Promise<AddressEntity> {
     return this.addressesService.setDefault(id, userId);
   }
 

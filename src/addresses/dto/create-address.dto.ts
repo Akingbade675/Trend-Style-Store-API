@@ -27,7 +27,7 @@ export class CreateAddressDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  state: string;
+  region: string;
 
   @IsMongoId()
   @IsNotEmpty()

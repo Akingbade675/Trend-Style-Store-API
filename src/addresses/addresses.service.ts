@@ -10,6 +10,8 @@ import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
 import { UserAddress } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { AddressEntity } from './entities/address.entity';
+import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class AddressesService {
@@ -61,12 +63,9 @@ export class AddressesService {
    * Sets all other addresses for a user to isDefault: false.
    * Meant to be used within a transaction.
    */
-  private async _unsetOtherDefaults(
-    userId: string,
-    excludeAddressId: string,
-  ): Promise<void> {
+  private async _unsetOtherDefaults(userId: string): Promise<void> {
     await this.prisma.userAddress.updateMany({
-      where: { userId, isDefault: true, id: { not: excludeAddressId } },
+      where: { userId, isDefault: true },
       data: { isDefault: false },
     });
   }
@@ -74,7 +73,7 @@ export class AddressesService {
   async create(
     userId: string,
     createAddressDto: CreateAddressDto,
-  ): Promise<UserAddress> {
+  ): Promise<AddressEntity> {
     const { countryId, isDefault, ...addressData } = createAddressDto;
 
     // Check if the countryId is valid and exists in the database
@@ -82,9 +81,9 @@ export class AddressesService {
 
     try {
       if (isDefault) {
-        return await this.prisma.$transaction(async (prisma) => {
+        return (await this.prisma.$transaction(async (prisma) => {
           // Set all other addresses to not default
-          await this._unsetOtherDefaults(userId, '');
+          await this._unsetOtherDefaults(userId);
 
           // Create the new address and set it as default
           const newAddress = await prisma.userAddress.create({
@@ -97,7 +96,7 @@ export class AddressesService {
             include: { country: true },
           });
           return newAddress;
-        });
+        })) as unknown as AddressEntity;
       } else {
         const newAddress = await this.prisma.userAddress.create({
           data: {
@@ -108,7 +107,7 @@ export class AddressesService {
           },
           include: { country: true },
         });
-        return newAddress;
+        return newAddress as unknown as AddressEntity;
       }
     } catch (error) {
       this._logger.error(
@@ -120,12 +119,13 @@ export class AddressesService {
     }
   }
 
-  async findAll(userId: string): Promise<UserAddress[]> {
+  async findAll(userId: string): Promise<AddressEntity[]> {
     try {
-      return await this.prisma.userAddress.findMany({
+      return (await this.prisma.userAddress.findMany({
         where: { userId },
+        orderBy: { createdAt: 'desc' },
         include: { country: true },
-      });
+      })) as unknown as AddressEntity[];
     } catch (error) {
       this._logger.error(
         `Failed to find addresses for user ${userId}: ${error.message}`,
@@ -135,15 +135,18 @@ export class AddressesService {
     }
   }
 
-  async findOne(id: string, userId: string): Promise<UserAddress> {
-    return await this._getAddressByIdAndOwner(id, userId);
+  async findOne(id: string, userId: string): Promise<AddressEntity> {
+    return (await this._getAddressByIdAndOwner(
+      id,
+      userId,
+    )) as unknown as AddressEntity;
   }
 
   async update(
     id: string,
     userId: string,
     updateAddressDto: UpdateAddressDto,
-  ): Promise<UserAddress> {
+  ): Promise<AddressEntity> {
     // Ensure the address belongs to the user
     await this._getAddressByIdAndOwner(id, userId);
 
@@ -155,7 +158,7 @@ export class AddressesService {
     try {
       if (isDefault === true) {
         return await this.prisma.$transaction(async (prisma) => {
-          await this._unsetOtherDefaults(userId, id);
+          await this._unsetOtherDefaults(userId);
 
           // Update the address and set it as default
           const updatedAddress = await prisma.userAddress.update({
@@ -167,7 +170,7 @@ export class AddressesService {
             },
             include: { country: true },
           });
-          return updatedAddress;
+          return updatedAddress as unknown as AddressEntity;
         });
       } else {
         const updatedAddress = await this.prisma.userAddress.update({
@@ -179,7 +182,7 @@ export class AddressesService {
           },
           include: { country: true },
         });
-        return updatedAddress;
+        return updatedAddress as unknown as AddressEntity;
       }
     } catch (error) {
       this._logger.error(
@@ -216,14 +219,14 @@ export class AddressesService {
     }
   }
 
-  async setDefault(id: string, userId: string): Promise<UserAddress> {
+  async setDefault(id: string, userId: string): Promise<AddressEntity> {
     // Ensure the address belongs to the user
     await this._getAddressByIdAndOwner(id, userId);
 
     try {
       return await this.prisma.$transaction(async (prisma) => {
         // Unset all other addresses as default
-        await this._unsetOtherDefaults(userId, id);
+        await this._unsetOtherDefaults(userId);
 
         // Set the specified address as default
         const updatedAddress = await prisma.userAddress.update({
@@ -231,7 +234,7 @@ export class AddressesService {
           data: { isDefault: true },
           include: { country: true },
         });
-        return updatedAddress;
+        return updatedAddress as unknown as AddressEntity;
       });
     } catch (error) {
       this._logger.error(
