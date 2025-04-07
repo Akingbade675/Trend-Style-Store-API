@@ -11,6 +11,7 @@ import jwtConfig from './auth/config/jwt.config';
 import refreshTokenConfig from './auth/config/refresh-token.config';
 import { RolesGuard } from './common/guards/role.guard';
 import { AddressesModule } from './addresses/addresses.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AddressesModule } from './addresses/addresses.module';
       cache: true,
       load: [passwordConfig, jwtConfig, refreshTokenConfig],
     }),
+    CategoriesModule,
   ],
   providers: [
     {

@@ -18,8 +18,6 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { SessionInfo } from 'src/common/decorators/session-info.decorator';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { Role } from 'src/common/enums/roles-enum';
 
 @Public()
 @Controller('auth')

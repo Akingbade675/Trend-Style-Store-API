@@ -109,7 +109,7 @@ model Category {
 
   // Relations
   brands        BrandCategory[]
-  products      Product[]
+  products      ProductCategory[]
 
   @@index([parentId])
 }
@@ -127,7 +127,7 @@ model Brand {
 }
 
 model BrandCategory {
-  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
   brandId    String   @db.ObjectId
   brand      Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
@@ -152,9 +152,6 @@ model Product {
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
 
-  categoryId    String   @db.ObjectId
-  category      Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-
   // Direct relationship to Brand (One-to-Many)
   brandId       String   @db.ObjectId
   brand         Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -162,6 +159,7 @@ model Product {
   // Relations
   images        ProductImage[]
   attributes    ProductAttribute[]
+  categories    ProductCategory[]
   items         ProductItem[]
   tags          ProductTag[]
 
@@ -179,6 +177,20 @@ model ProductImage {
   product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
+}
+
+model ProductCategory {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+
+  productId   String    @db.ObjectId
+  product     Product   @relation(fields: [productId], references: [id], onDelete: NoAction)
+
+  categoryId  String    @db.ObjectId
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+
+  @@unique([productId, categoryId]) // Ensure unique pairings
+  @@index([productId])
+  @@index([categoryId])
 }
 
 model Tag {
