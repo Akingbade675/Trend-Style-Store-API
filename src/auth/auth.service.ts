@@ -317,11 +317,9 @@ export class AuthService {
         email: true,
         firstName: true,
         lastName: true,
-        avatar: true,
         role: true,
         createdAt: true,
         updatedAt: true,
-        // Add roles or other necessary fields here
       },
     });
 

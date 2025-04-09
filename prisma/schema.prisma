@@ -18,6 +18,14 @@ enum Role {
   ADMIN
 }
 
+enum MediaFolder {
+  banners
+  brands
+  categories
+  products
+  users
+}
+
 // --- User and Auth Related Models ---
 
 model User {
@@ -28,8 +36,7 @@ model User {
   firstName            String
   lastName             String
   phoneNumber          String?
-  role                 Role           @default(CUSTOMER)        
-  avatar               String?        // URL to avatar image
+  role                 Role           @default(CUSTOMER)
   isEmailVerified      Boolean        @default(false)
   verificationToken    String?        
   passwordResetToken   String?        
@@ -37,6 +44,9 @@ model User {
 
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  avatarId             String?        @db.ObjectId
+  avatar               Media?         @relation("UserAvatar", fields: [avatarId], references: [id], onDelete: SetNull)
 
   // Relations
   orders               Order[]
@@ -73,8 +83,8 @@ model UserAddress {
   postalCode    String? 
   isDefault     Boolean @default(false)
 
-  createdAt            DateTime       @default(now()) @map("created_at")
-  updatedAt            DateTime       @updatedAt @map("updated_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
 
   userId        String  @db.ObjectId
   user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -93,14 +103,43 @@ model Country {
   addresses     UserAddress[]
 }
 
+model Media {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  url       String   // Public URL of the stored file (e.g., S3 URL, Cloudinary URL, local static path)
+  altText   String?  // Alt text for accessibility
+  filename  String   // Original filename
+  mimeType  String?  // e.g., 'image/jpeg', 'image/png'
+  size      Int?     // Size in bytes
+  folder    MediaFolder?  // Folder categorization (e.g., 'products', 'brands', 'banners', 'categories') - use an Enum potentially
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Optional: Track uploader
+  // uploadedByUserId String? @db.ObjectId
+  // uploadedBy User? @relation("UploadedMedia", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  // Inverse relations (shows where this media item is used) - useful for checking before deletion
+  productImages       ProductImage[]
+  productItemImages   ProductItemImage[]
+  banners             Banner[]
+  categoryImage       Category[]            @relation("CategoryImage")
+  brandLogos          Brand[]               @relation("BrandLogo")
+  userAvatars         User[]                @relation("UserAvatar")
+  
+  @@index([folder])
+  @@index([filename])
+}
+
 // --- Product Related Models ---
 
 model Category {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
   name          String      @unique
-  imageUrl      String?
   description   String?
   isFeatured    Boolean     @default(false)
+
+  imageId       String?     @db.ObjectId
+  image         Media?      @relation("CategoryImage", fields: [imageId], references: [id], onDelete: SetNull)
 
   // Self-relation for subcategories
   parentId      String?     @db.ObjectId
@@ -114,12 +153,23 @@ model Category {
   @@index([parentId])
 }
 
+model Banner {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  isActive      Boolean?    @default(true)
+  targetScreen  String
+  
+  imageId       String      @db.ObjectId
+  image         Media       @relation(fields: [imageId], references: [id], onDelete: Restrict)
+}
+
 model Brand {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
   name          String      @unique
   description   String?
-  logoUrl       String?
   isFeatured    Boolean     @default(false)
+
+  logoId        String?     @db.ObjectId
+  logo          Media?     @relation("BrandLogo", fields: [logoId], references: [id], onDelete: SetNull)
 
   // Relations
   products      Product[]
@@ -169,9 +219,11 @@ model Product {
 
 model ProductImage {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
-  imageUrl      String
   altText       String?     // Alternative text for the image
   isPrimary     Boolean     @default(false) // Indicates if this is the primary image for the product
+
+  imageId       String      @db.ObjectId
+  image         Media       @relation(fields: [imageId], references: [id], onDelete: Restrict)
 
   productId     String      @db.ObjectId
   product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -260,6 +312,22 @@ model ProductItem {
   // images        ProductImage[] // Optional: If you want to have images specific to this item
   orderItems    OrderItem[]
   attributes    ProductItemAttribute[] // Join table for attributes
+  images        ProductItemImage[]
+}
+
+model ProductItemImage {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  isPrimary     Boolean     @default(false) // Indicates if this is the primary image for this specific item variation
+
+  productItemId String      @db.ObjectId
+  productItem   ProductItem @relation(fields: [productItemId], references: [id], onDelete: Cascade) // If item deleted, link deleted
+
+  imageId       String      @db.ObjectId
+  image         Media       @relation(fields: [imageId], references: [id], onDelete: Restrict) // Prevent Media deletion if used here
+
+  @@unique([productItemId, imageId]) // Prevent linking the same image to the same item multiple times
+  @@index([productItemId])
+  @@index([imageId])
 }
 
 // Join table connecting a ProductItem to its specific ProductAttribute values

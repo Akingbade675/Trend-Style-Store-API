@@ -8,7 +8,6 @@ export class UserEntity {
   lastName: string;
   phoneNumber: string;
   role: string | Role;
-  avatar: string;
   isEmailVerified: boolean;
   createdAt: Date;
 

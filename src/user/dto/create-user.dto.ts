@@ -1,7 +1,6 @@
 import { Role } from '@prisma/client';
 import {
   IsEmail,
-  IsEmpty,
   IsEnum,
   IsNotEmpty,
   IsPhoneNumber,
@@ -41,10 +40,6 @@ export class CreateUserDto {
   })
   @IsNotEmpty({ message: 'Phone number should not be empty.' })
   phoneNumber: string;
-
-  @IsString({ message: 'Avatar must be a string.' })
-  @IsNotEmpty({ message: 'Avatar should not be empty.' })
-  avatar: string;
 
   @IsEnum(Role, { message: 'Role must be either CUSTOMER or ADMIN.' })
   role?: Role = Role.CUSTOMER; // Default to CUSTOMER if not provided
