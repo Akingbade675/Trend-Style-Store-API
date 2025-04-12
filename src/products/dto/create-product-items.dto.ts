@@ -24,7 +24,7 @@ export class ProductItemImageDto {
 
   @IsBoolean()
   @IsOptional()
-  isPrimary?: boolean;
+  isPrimary?: boolean = false;
 }
 
 export class CreateProductItemDto {
@@ -52,10 +52,10 @@ export class CreateProductItemDto {
   @IsOptional()
   isActive?: boolean;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsArray()
   @IsMongoId({ each: true })
-  attributes?: string[];
+  attributes: string[];
 
   @IsArray()
   @IsOptional()

@@ -15,7 +15,7 @@ export class ProductImageDto {
 
   @IsBoolean()
   @IsOptional()
-  isPrimary?: boolean;
+  isPrimary?: boolean = false;
 }
 
 export class CreateProductImagesDto {

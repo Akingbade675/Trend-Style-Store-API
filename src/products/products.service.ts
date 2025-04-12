@@ -247,7 +247,7 @@ export class ProductsService {
             attributes: {
               select: {
                 id: true,
-                productArrribute: {
+                productAttribute: {
                   select: { id: true, value: true, attributeType: true },
                 },
               },
@@ -265,121 +265,178 @@ export class ProductsService {
     return product;
   }
 
-  async remove(id: string) {
-    // Check if product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-      select: { id: true, name: true },
-    });
+  async removeProduct(id: string) {
+    this.logger.log(`Attempting to remove product with ID: ${id}`);
 
-    if (!product) {
-      throw new NotFoundException(`Product with id ${id} not found`);
-    }
-
-    // 3. Proceed with deletion (Cascades should handle related data based on schema)
     try {
-      await this.prisma.product.delete({
+      // Directly attempt deletion. Prisma will throw P2025 if not found.
+      const deletedProduct = await this.prisma.product.delete({
         where: { id },
+        select: { name: true }, // Select name to include in success message
       });
-      return { message: `Product "${product.name}" successfully deleted.` };
+
+      this.logger.log(
+        `Successfully removed product "${deletedProduct.name}" (ID: ${id})`,
+      );
+      return {
+        message: `Product "${deletedProduct.name}" successfully deleted.`,
+      };
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException(`Product with ID "${id}" not found.`); // Should be caught earlier, but safeguard
-      }
       this.logger.error(
         `Failed to delete product ${id}: ${error.message}`,
         error.stack,
       );
-      throw new InternalServerErrorException('Could not delete product.');
+
+      // Check if the error is because the record to delete was not found
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Product with ID "${id}" not found.`);
+      }
+
+      // Handle other potential errors (e.g., database connection issues)
+      throw new InternalServerErrorException(
+        'Could not delete product due to an unexpected error.',
+      );
     }
   }
 
-  async getProductReviews(id: string) {
-    // Check if product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-    });
+  async getProductReviews(productId: string) {
+    this.logger.log(`Fetching reviews for product ID: ${productId}`);
 
-    if (!product) {
-      throw new NotFoundException(`Product with id ${id} not found`);
-    }
-
-    // Get all product items
-    const productItems = await this.prisma.productItem.findMany({
-      where: { productId: id },
+    // 1. Validate product exists
+    const productExists = await this.prisma.product.findUnique({
+      where: { id: productId },
       select: { id: true },
     });
-
-    const productItemIds = productItems.map((item) => item.id);
-
-    // Get reviews for all items
-    const reviews = await this.prisma.userReview.findMany({
-      where: {
-        orderItem: {
-          productItemId: {
-            in: productItemIds,
-          },
-        },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-          },
-        },
-        orderItem: {
-          include: {
-            productItem: true,
-          },
-        },
-      },
-      orderBy: {
-        reviewDate: 'desc',
-      },
-    });
-
-    return reviews;
-  }
-
-  async getProductItems(id: string) {
-    // Check if product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-    });
-
-    if (!product) {
-      throw new NotFoundException(`Product with id ${id} not found`);
+    if (!productExists) {
+      throw new NotFoundException(`Product with id ${productId} not found`);
     }
 
-    // Get all items with their attributes and images
-    const items = await this.prisma.productItem.findMany({
-      where: { productId: id },
-      include: {
-        attributes: {
-          include: {
-            productArrribute: {
-              include: {
-                attributeType: true,
+    try {
+      // 2. Get reviews linked via OrderItems associated with the product's items
+      // This avoids fetching all item IDs first if the relation allows direct traversal
+      const reviews = await this.prisma.userReview.findMany({
+        where: {
+          orderItem: {
+            productItem: {
+              productId: productId, // Filter directly on the product ID
+            },
+          },
+          // Add other review filters if needed (e.g., rating > x)
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true, // Consider if needed, maybe just username/avatar
+              lastName: true, // Consider if needed
+              avatar: { select: { url: true } }, // Select only URL if avatar is a relation
+            },
+          },
+          orderItem: {
+            select: {
+              id: true,
+              // Include minimal item details if needed, e.g., for context
+              productItem: {
+                select: {
+                  id: true,
+                  sku: true,
+                  // Maybe include attributes relevant to the review context?
+                  // attributes: { select: { productAttribute: { select: { value: true, attributeType: { select: { name: true }}}}} }
+                },
               },
             },
           },
         },
-        images: {
-          include: {
-            image: true,
+        orderBy: {
+          reviewDate: 'desc',
+        },
+        // Add pagination if necessary
+        // take: 20,
+        // skip: 0,
+      });
+
+      this.logger.log(
+        `Found ${reviews.length} reviews for product ${productId}`,
+      );
+      return reviews;
+    } catch (error) {
+      this.logger.error(
+        `Error fetching reviews for product ${productId}: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        'Could not fetch product reviews.',
+      );
+    }
+  }
+
+  async getProductItems(productId: string) {
+    this.logger.log(`Fetching items for product ID: ${productId}`);
+
+    // 1. Validate product exists
+    const productExists = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
+    if (!productExists) {
+      throw new NotFoundException(`Product with id ${productId} not found`);
+    }
+
+    try {
+      // 2. Get active items with their attributes and images
+      const items = await this.prisma.productItem.findMany({
+        where: {
+          productId: productId,
+          isActive: true, // Typically fetch only active items
+        },
+        include: {
+          // Assuming relation on ProductItemAttribute is 'productAttribute'
+          attributes: {
+            select: {
+              id: true, // ID of the ProductItemAttribute link itself
+              productAttribute: {
+                // The actual ProductAttribute relation
+                select: {
+                  id: true, // ID of the ProductAttribute
+                  value: true,
+                  attributeType: {
+                    // Include the linked AttributeType
+                    select: { id: true, name: true },
+                  },
+                },
+              },
+            },
+          },
+          images: {
+            select: {
+              id: true, // ID of the ProductItemImage link
+              isPrimary: true,
+              image: {
+                // Include the linked Media object
+                select: { id: true, url: true, altText: true },
+              },
+            },
+            orderBy: { isPrimary: 'desc' }, // Optional: Ensure primary image comes first
           },
         },
-      },
-    });
+        // Add orderBy for items if needed, e.g., by creation date or SKU
+        // orderBy: { createdAt: 'asc' }
+      });
 
-    return items;
+      this.logger.log(`Found ${items.length} items for product ${productId}`);
+      return items;
+    } catch (error) {
+      this.logger.error(
+        `Error fetching items for product ${productId}: ${error.message}`,
+        error.stack,
+      );
+      // No specific Prisma errors expected here usually, unless DB issue
+      throw new InternalServerErrorException('Could not fetch product items.');
+    }
   }
 
   async getProductItem(id: string) {
@@ -389,7 +446,7 @@ export class ProductsService {
         product: true,
         attributes: {
           include: {
-            productArrribute: {
+            productAttribute: {
               include: {
                 attributeType: true,
               },
@@ -454,35 +511,243 @@ export class ProductsService {
     return null;
   }
 
-  async updateProductCategories(id: string, categoryIds: string[]) {
-    // Check if product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-    });
+  async updateProductCategories(productId: string, categoryIds: string[]) {
+    this.logger.log(
+      `Attempting to update categories for product ID: ${productId}`,
+    );
 
+    // 1. Validate Product
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
     if (!product) {
-      throw new NotFoundException(`Product with id ${id} not found`);
+      throw new NotFoundException(`Product with id ${productId} not found`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // Delete existing categories
-      await tx.productCategory.deleteMany({
-        where: { productId: id },
+    // 2. Validate provided Category IDs
+    if (categoryIds.length > 0) {
+      await this._validateRelationIds(categoryIds, 'category');
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // 3. Get Current Category Links
+        const currentLinks = await tx.productCategory.findMany({
+          where: { productId: productId },
+          select: { categoryId: true },
+        });
+        const currentCategoryIds = new Set(
+          currentLinks.map((link) => link.categoryId),
+        );
+        const incomingCategoryIds = new Set(categoryIds);
+
+        // 4. Calculate Difference
+        const idsToAdd = categoryIds.filter(
+          (id) => !currentCategoryIds.has(id),
+        );
+        const idsToRemove = Array.from(currentCategoryIds).filter(
+          (id) => !incomingCategoryIds.has(id),
+        );
+
+        this.logger.verbose(
+          `Categories to add: ${idsToAdd.length}, Categories to remove: ${idsToRemove.length}`,
+        );
+
+        // 5. Perform Deletions
+        if (idsToRemove.length > 0) {
+          await tx.productCategory.deleteMany({
+            where: {
+              productId: productId,
+              categoryId: { in: idsToRemove },
+            },
+          });
+          this.logger.verbose(`Removed ${idsToRemove.length} category links.`);
+        }
+
+        // 5. Perform Creations
+        if (idsToAdd.length > 0) {
+          await tx.productCategory.createMany({
+            data: idsToAdd.map((categoryId) => ({
+              productId: productId,
+              categoryId,
+            })),
+          });
+          this.logger.verbose(`Added ${idsToAdd.length} category links.`);
+        }
       });
 
-      // Create new category relationships
-      if (categoryIds.length > 0) {
-        await tx.productCategory.createMany({
-          data: categoryIds.map((categoryId) => ({
-            productId: id,
-            categoryId,
-          })),
-        });
+      // Return the updated product data after transaction commits
+      // return this.findOne(productId);
+      return {
+        message: `Successfully updated categories for product ${productId}.`,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error updating categories for product ${productId}: ${error.message}`,
+        error.stack,
+      );
+
+      // Re-throw specific validation errors
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
       }
 
-      // Return updated product
-      return this.findOne(id);
+      // Handle potential Prisma errors during transaction
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        // P2003: Foreign key constraint failed (less likely with validation, but safeguard)
+        if (error.code === 'P2003') {
+          throw new BadRequestException(
+            `Invalid category ID found during update.`,
+          );
+        }
+        // P2002: Unique constraint failed (if skipDuplicates isn't used/supported)
+        if (error.code === 'P2002') {
+          throw new ConflictException(
+            'A conflict occurred while updating categories. A link might already exist.',
+          );
+        }
+        // P2025: Record to delete not found (could happen in race conditions)
+        if (error.code === 'P2025') {
+          this.logger.warn(
+            `Record to delete not found during category update for product ${productId}. Might indicate a race condition.`,
+          );
+        }
+      }
+
+      // Generic fallback
+      throw new InternalServerErrorException(
+        'Failed to update product categories due to an unexpected error.',
+      );
+    }
+  }
+
+  async updateProductImages(productId: string, dto: CreateProductImagesDto) {
+    // Reuse Create DTO if structure matches
+    this.logger.log(`Attempting to update images for product ID: ${productId}`);
+
+    // 1. Validate Product
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
     });
+    if (!product) {
+      throw new NotFoundException(`Product with ID "${productId}" not found.`);
+    }
+
+    // 2. Validate incoming Image IDs
+    const incomingImageIds = dto.images.map((img) => img.imageId);
+    if (incomingImageIds.length > 0) {
+      await this._validateMediaIds(
+        incomingImageIds,
+        `product update ${productId}`,
+      );
+    } else {
+      // If empty array is provided, it means delete all images
+      this.logger.log(
+        `Received empty image list for product ${productId}. Deleting all existing images.`,
+      );
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // 3. Delete all existing image links for this product
+        await tx.productImage.deleteMany({
+          where: { productId: productId },
+        });
+        this.logger.verbose(`Deleted existing images for product ${productId}`);
+
+        // 4. Prepare and Create new image links if any provided
+        if (dto.images.length > 0) {
+          let primaryImageSet = false;
+          const imageData = dto.images.map((img, index) => {
+            let isPrimary = false;
+            // Determine primary: first marked true, or index 0 if none marked true
+            if (index === 0 && !dto.images.some((i) => i.isPrimary)) {
+              isPrimary = true;
+            }
+            if (img.isPrimary && !primaryImageSet) {
+              isPrimary = true;
+              primaryImageSet = true;
+            } else if (img.isPrimary && primaryImageSet) {
+              isPrimary = false;
+            } else if (!img.isPrimary && index !== 0) {
+              isPrimary = false;
+            } // Handled by initial false state
+
+            return {
+              productId: productId,
+              imageId: img.imageId,
+              isPrimary: isPrimary,
+            };
+          });
+
+          // Ensure exactly one primary after mapping
+          const primaryIndex = imageData.findIndex((img) => img.isPrimary);
+          imageData.forEach((img, index) => {
+            img.isPrimary = index === primaryIndex;
+          });
+          // Fallback if somehow no primary was set (e.g., empty input array edge case, though handled earlier)
+          if (primaryIndex === -1 && imageData.length > 0) {
+            imageData[0].isPrimary = true;
+          }
+
+          const createResult = await tx.productImage.createMany({
+            data: imageData,
+          });
+          this.logger.verbose(
+            `Created ${createResult.count} new image links for product ${productId}`,
+          );
+        }
+      });
+
+      return {
+        message: `Successfully updated images for product ${productId}.`,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error updating images for product ${productId}: ${error.message}`,
+        error.stack,
+      );
+
+      // Re-throw specific validation errors
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      // Handle potential Prisma errors during transaction
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        // P2003: Foreign key constraint failed (invalid imageId)
+        if (error.code === 'P2003') {
+          throw new BadRequestException(
+            `Invalid image ID found during update.`,
+          );
+        }
+        // P2002: Unique constraint failed (productId_imageId)
+        if (error.code === 'P2002') {
+          throw new ConflictException(
+            'A conflict occurred while updating images. A link might already exist.',
+          );
+        }
+        // P2025: Record to delete/update not found (product disappeared?)
+        if (error.code === 'P2025') {
+          throw new NotFoundException(
+            `Product with ID "${productId}" was not found during the update operation.`,
+          );
+        }
+      }
+
+      // Generic fallback
+      throw new InternalServerErrorException(
+        'Failed to update product images due to an unexpected error.',
+      );
+    }
   }
 
   async updateProductTags(id: string, tagIds: string[]) {
@@ -517,28 +782,44 @@ export class ProductsService {
   }
 
   async setFeaturedStatus(id: string, isFeatured: boolean) {
-    // Check if product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-    });
+    this.logger.log(
+      `Setting featured status to ${isFeatured} for product ID: ${id}`,
+    );
+    try {
+      // Use update operation which inherently checks for existence
+      const updatedProduct = await this.prisma.product.update({
+        where: { id },
+        data: { isFeatured },
+        select: { id: true, isFeatured: true }, // Select only necessary fields
+      });
 
-    if (!product) {
-      throw new NotFoundException(`Product with id ${id} not found`);
+      this.logger.log(`Successfully updated featured status for product ${id}`);
+      return {
+        message: `Successfully set featured status to ${isFeatured} for product ${id}.`,
+        data: updatedProduct, // Return the updated status
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to set featured status for product ${id}: ${error.message}`,
+        error.stack,
+      );
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025' // Record to update not found
+      ) {
+        throw new NotFoundException(`Product with ID "${id}" not found.`);
+      }
+      throw new InternalServerErrorException(
+        'Could not update featured status.',
+      );
     }
-
-    // Update the featured status
-    await this.prisma.product.update({
-      where: { id },
-      data: { isFeatured },
-    });
-
-    return this.findOne(id);
   }
 
   async setActiveStatus(id: string, isActive: boolean) {
     // Check if product exists
     const product = await this.prisma.product.findUnique({
       where: { id },
+      select: { id: true },
     });
 
     if (!product) {
@@ -551,7 +832,9 @@ export class ProductsService {
       data: { isActive },
     });
 
-    return this.findOne(id);
+    return {
+      message: `Successfully updated active status for product ${id}.`,
+    };
   }
 
   async createBaseProduct(createProductDto: CreateBaseProductDto) {
@@ -819,7 +1102,6 @@ export class ProductsService {
           productId,
           imageId: img.imageId,
           isPrimary,
-          // Add other ProductImage fields if necessary, e.g., altText override
         };
       });
 

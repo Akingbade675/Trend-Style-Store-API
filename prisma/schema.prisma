@@ -339,7 +339,7 @@ model ProductItemAttribute {
   productItem   ProductItem @relation(fields: [productItemId], references: [id], onDelete: Cascade)
 
   productAttributeId String   @db.ObjectId
-  productArrribute ProductAttribute @relation(fields: [productAttributeId], references: [id], onDelete: Cascade)
+  productAttribute ProductAttribute @relation(fields: [productAttributeId], references: [id], onDelete: Cascade)
 
   // Relations
 
