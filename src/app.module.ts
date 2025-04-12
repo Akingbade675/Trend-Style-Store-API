@@ -17,6 +17,9 @@ import { MediaModule } from './media/media.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { S3Module } from 'nestjs-s3';
+import { AttributeTypesModule } from './attribute-types/attribute-types.module';
+import { BrandsModule } from './brands/brands.module';
+import { BannersModule } from './banners/banners.module';
 
 @Module({
   imports: [
@@ -61,6 +64,9 @@ import { S3Module } from 'nestjs-s3';
       imports: [ConfigModule],
       inject: [ConfigService],
     }),
+    AttributeTypesModule,
+    BrandsModule,
+    BannersModule,
   ],
   providers: [
     {
