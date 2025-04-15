@@ -1,10 +1,4 @@
-import {
-  IsBoolean,
-  IsMongoId,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-} from 'class-validator';
+import { IsBoolean, IsMongoId, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateProductItemImageDto {
   @IsMongoId()

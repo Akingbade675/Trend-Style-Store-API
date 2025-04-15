@@ -18,6 +18,11 @@ enum Role {
   ADMIN
 }
 
+enum ProductType {
+  SINGLE
+  VARIABLE
+}
+
 enum MediaFolder {
   banners
   brands
@@ -49,6 +54,7 @@ model User {
   avatar               Media?         @relation("UserAvatar", fields: [avatarId], references: [id], onDelete: SetNull)
 
   // Relations
+  cart                 Cart?          // Add one-to-one relation to Cart
   orders               Order[]
   reviews              UserReview[]
   addresses            UserAddress[]
@@ -157,6 +163,7 @@ model Banner {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
   isActive      Boolean?    @default(true)
   targetScreen  String
+  // createdAt     DateTime    @default(now()) @map("created_at")
   
   imageId       String      @db.ObjectId
   image         Media       @relation(fields: [imageId], references: [id], onDelete: Restrict)
@@ -169,7 +176,7 @@ model Brand {
   isFeatured    Boolean     @default(false)
 
   logoId        String?     @db.ObjectId
-  logo          Media?     @relation("BrandLogo", fields: [logoId], references: [id], onDelete: SetNull)
+  logo          Media?      @relation("BrandLogo", fields: [logoId], references: [id], onDelete: SetNull)
 
   // Relations
   products      Product[]
@@ -197,6 +204,7 @@ model Product {
   originalPrice Float?       // Original price before any discounts
   salePrice     Float?      // Current selling price
   skuPrefix     String?
+  productType   ProductType @default(SINGLE)
   isFeatured    Boolean     @default(false)
   isActive      Boolean     @default(true)
   createdAt     DateTime    @default(now()) @map("created_at")
@@ -212,9 +220,9 @@ model Product {
   categories    ProductCategory[]
   items         ProductItem[]
   tags          ProductTag[]
+  reviews       UserReview[]
 
   @@index([brandId])
-  @@index([name])
 }
 
 model ProductImage {
@@ -309,7 +317,7 @@ model ProductItem {
   product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   // Relations
-  // images        ProductImage[] // Optional: If you want to have images specific to this item
+  cartItems     CartItem[]
   orderItems    OrderItem[]
   attributes    ProductItemAttribute[] // Join table for attributes
   images        ProductItemImage[]
@@ -352,8 +360,11 @@ model ProductItemAttribute {
 
 model OrderStatus {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
-  status          String    @unique // e.g., "Pending", "Processing", "Shipped", "Delivered", "Cancelled", "Returned"
+  status        String      @unique // e.g., "PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED", "RETURNED"
   description   String?
+  // Optional: sequence for ordering statuses in UI, colorCode for display
+  sequence      Int?
+  colorCode     String?
 
   // Relations
   orders        Order[]
@@ -361,13 +372,23 @@ model OrderStatus {
 
 model Order {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber   String      @unique // Unique order number
   orderDate     DateTime    @default(now())
   deliveryDate  DateTime?   // Estimated or actual delivery date
-  orderNumber   String      @unique // Unique order number
-  totalAmount   Float       // Total amount for the order
-  paymentStatus String?     // e.g., "Paid", "Pending", "Failed"
-  transactionId  String?     // Reference to payment transaction ID
+
+  subTotal      Float       // Total before discounts and shipping
+  shippingCost  Float       @default(0.0)
+  taxAmount     Float       @default(0.0)
+  // Discounts applied (could be simple value or linked to Coupon/Discount models)
+  discountAmount    Float       @default(0.0)
+  // Final amount charged: subTotal + shippingCost + taxAmount - discountAmount
+  totalAmount       Float
+
   shippingAddress Json      // snapshot of the shipping address at the time of order
+  billingAddress  Json?
+
+  paymentStatus String      @default("PENDING") // e.g., "PAID", "PENDING", "FAILED"
+  transactionId  String?     // Reference to payment transaction ID
 
   userId        String      @db.ObjectId
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -377,43 +398,105 @@ model Order {
 
   items         OrderItem[]
 
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
   @@index([userId])
   @@index([orderStatusId])
 }
 
+// Represents a single line item within an Order
 model OrderItem {
-  id            String      @id @default(auto()) @map("_id") @db.ObjectId
-  quantity      Int         // Quantity of the product ordered
-  price         Float       // Price *at the time of order* (snapshot)
-  productName   String?     // Snapshot of the product name at the time of order
-  productImage  String?     // Snapshot of the product image at the time of order
-  productSku    String?     // Snapshot of the product SKU at the time of order
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  // Quantity of this specific item ordered
+  quantity       Int
+  // Price *per single item* at the time the order was placed (snapshot)
+  pricePerItem   Float
+  // Total price for this line item (quantity * pricePerItem) - calculated and stored for convenience
+  totalPrice     Float
 
-  orderId       String      @db.ObjectId
-  order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // --- Product Details Snapshot ---
+  // Store key details at the time of order to avoid issues if product is updated/deleted later
+  productName    String  // Snapshot of product name
+  productSku     String? // Snapshot of product item SKU (if applicable)
+  productImage   String? // Snapshot of primary image URL for the item/product
 
-  productItemId String      @db.ObjectId
-  productItem   ProductItem @relation(fields: [productItemId], references: [id], onDelete: Restrict)
+  // --- Relations ---
+  // Link back to the parent Order
+  orderId        String  @db.ObjectId
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade) // Delete item if order is deleted
 
-  // Relations
-  review       UserReview? 
-  
+  // Link to the specific ProductItem (SKU/variation) that was ordered
+  productItemId  String  @db.ObjectId
+  productItem    ProductItem @relation(fields: [productItemId], references: [id], onDelete: Restrict) // Prevent deleting ProductItem if it has been ordered
+
+  // Link to a potential review for this specific ordered item
+  review         UserReview? // An order item can have one review
+
   @@index([orderId])
   @@index([productItemId])
 }
 
-model UserReview {
-  id            String      @id @default(auto()) @map("_id") @db.ObjectId
-  ratingValue   Int         // Rating value (1-5)
-  comment       String?     
-  reviewDate    DateTime    @default(now())
+// --- Cart Models ---
 
-  userId        String      @db.ObjectId
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+// Represents a user's shopping cart
+model Cart {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
 
-  orderItemId   String      @db.ObjectId @unique // Ensure a user can only review an order item once
-  orderItem     OrderItem   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  userId    String    @unique @db.ObjectId
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  // List of items currently in the cart
+  items     CartItem[]
 }
 
+// Represents an item within a shopping cart
+model CartItem {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  // Quantity of the product item in the cart
+  quantity      Int         @default(1)
+
+  // --- Relations ---
+  // Link back to the parent Cart
+  cartId        String      @db.ObjectId
+  cart          Cart        @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  // Link to the specific ProductItem (SKU/variation) added to the cart
+  productItemId String      @db.ObjectId
+  productItem   ProductItem @relation(fields: [productItemId], references: [id], onDelete: Cascade)
+
+  // --- Timestamps ---
+  addedAt       DateTime    @default(now()) // When the item was added/last updated
+
+  // Ensure a user cannot add the exact same product item twice to their cart; update quantity instead.
+  @@unique([cartId, productItemId])
+  @@index([cartId])
+  @@index([productItemId])
+}
+
+model UserReview {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  ratingValue  Int       // Rating value (e.g., 1-5)
+  title        String?   // Optional: Short title for the review
+  comment      String?
+  reviewDate   DateTime  @default(now())
+
+  // Link to the reviewer
+  userId       String    @db.ObjectId
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Link to the specific ordered item (verification)
+  orderItemId  String    @unique @db.ObjectId // Ensures one review per specific ordered item instance
+  orderItem    OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  // Denormalized link to the base Product for easier querying (Optional but Recommended)
+  productId    String    @db.ObjectId
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([productId]) // Index for querying reviews by product
+}

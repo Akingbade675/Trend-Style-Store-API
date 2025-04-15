@@ -20,6 +20,7 @@ import { S3Module } from 'nestjs-s3';
 import { AttributeTypesModule } from './attribute-types/attribute-types.module';
 import { BrandsModule } from './brands/brands.module';
 import { BannersModule } from './banners/banners.module';
+import { CartModule } from './cart/cart.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { BannersModule } from './banners/banners.module';
     AttributeTypesModule,
     BrandsModule,
     BannersModule,
+    CartModule,
   ],
   providers: [
     {

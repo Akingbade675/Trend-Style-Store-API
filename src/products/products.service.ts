@@ -6,21 +6,16 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateProductDto } from './dto/create-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
-import { FindProductsDto } from './dto/find-products.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-import slugify from 'slugify';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { v4 as uuidv4 } from 'uuid';
-import { CreateProductItemDto } from './dto/create-product-item.dto';
-import { CreateProductAttributeDto } from './dto/create-product-attribute.dto';
 import { CreateBaseProductDto } from './dto/create-base-product.dto';
-import { CreateProductCategoriesDto } from './dto/create-product-categories.dto';
-import { CreateProductTagsDto } from './dto/create-product-tags.dto';
-import { CreateProductImagesDto } from './dto/create-product-images.dto';
 import { CreateProductAttributesDto } from './dto/create-product-attributes.dto';
+import { CreateProductCategoriesDto } from './dto/create-product-categories.dto';
+import { CreateProductImagesDto } from './dto/create-product-images.dto';
 import { CreateProductItemsDto } from './dto/create-product-items.dto';
+import { CreateProductTagsDto } from './dto/create-product-tags.dto';
+import { FindProductsDto } from './dto/find-products.dto';
 
 @Injectable()
 export class ProductsService {

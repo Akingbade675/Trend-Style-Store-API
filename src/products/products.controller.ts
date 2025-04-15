@@ -1,30 +1,28 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
   Query,
   UseGuards,
-  HttpStatus,
-  HttpCode,
-  ParseUUIDPipe,
 } from '@nestjs/common';
-import { ProductsService } from './products.service';
-import { CreateBaseProductDto } from './dto/create-base-product.dto';
-import { CreateProductCategoriesDto } from './dto/create-product-categories.dto';
-import { CreateProductTagsDto } from './dto/create-product-tags.dto';
-import { CreateProductImagesDto } from './dto/create-product-images.dto';
-import { CreateProductAttributesDto } from './dto/create-product-attributes.dto';
-import { CreateProductItemsDto } from './dto/create-product-items.dto';
-import { FindProductsDto } from './dto/find-products.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
-import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
-import { RolesGuard } from 'src/common/guards/role.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { Role } from 'src/common/enums/roles-enum';
+import { RolesGuard } from 'src/common/guards/role.guard';
+import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
+import { CreateBaseProductDto } from './dto/create-base-product.dto';
+import { CreateProductAttributesDto } from './dto/create-product-attributes.dto';
+import { CreateProductCategoriesDto } from './dto/create-product-categories.dto';
+import { CreateProductImagesDto } from './dto/create-product-images.dto';
+import { CreateProductItemsDto } from './dto/create-product-items.dto';
+import { CreateProductTagsDto } from './dto/create-product-tags.dto';
+import { FindProductsDto } from './dto/find-products.dto';
+import { ProductsService } from './products.service';
 
 @UseGuards(RolesGuard)
 @Roles(Role.ADMIN)
