@@ -1,17 +1,17 @@
 // src/brands/brands.service.ts
 import {
-  Injectable,
-  NotFoundException,
-  InternalServerErrorException,
   BadRequestException,
   ConflictException,
+  Injectable,
+  InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
+import { Brand, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service'; // Adjust path
 import { CreateBrandDto } from './dto/create-brand.dto';
-import { UpdateBrandDto } from './dto/update-brand.dto';
 import { FindBrandsDto } from './dto/find-brands.dto';
-import { Prisma, Brand } from '@prisma/client';
+import { UpdateBrandDto } from './dto/update-brand.dto';
 
 @Injectable()
 export class BrandsService {
@@ -126,7 +126,7 @@ export class BrandsService {
           skip,
           take: limit,
           orderBy,
-          include: { logo: true }, // Include logo for listings
+          include: { logo: { select: { id: true, url: true, altText: true } } },
         }),
         this.prisma.brand.count({ where }),
       ]);
@@ -141,10 +141,9 @@ export class BrandsService {
     const brand = await this.prisma.brand.findUnique({
       where: { id },
       include: {
-        logo: true,
+        logo: { select: { id: true, url: true, altText: true } },
         categories: {
-          // Include linked categories
-          include: { category: { select: { id: true, name: true } } },
+          select: { category: { select: { id: true, name: true } } },
         },
       },
     });
