@@ -12,7 +12,7 @@ import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
-  @Post()
+  @Post('items')
   addToCart(@CurrentUser() user: UserWithoutPassword, @Body() addToCartDto: AddToCartDto) {
     return this.cartService.addItemToCart(user.id, addToCartDto);
   }
@@ -22,7 +22,7 @@ export class CartController {
     return this.cartService.getCart(user.id);
   }
 
-  @Patch('item/:itemId')
+  @Patch('items/:itemId')
   updateCartItem(
     @CurrentUser() user: UserWithoutPassword,
     @Param('itemId') itemId: string,
@@ -31,7 +31,7 @@ export class CartController {
     return this.cartService.updateCartItem(user.id, itemId, updateCartItemDto);
   }
 
-  @Delete('item/:itemId')
+  @Delete('items/:itemId')
   removeCartItem(@CurrentUser() user: UserWithoutPassword, @Param('itemId') itemId: string) {
     return this.cartService.removeItemFromCart(user.id, itemId);
   }

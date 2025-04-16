@@ -21,6 +21,8 @@ import { AttributeTypesModule } from './attribute-types/attribute-types.module';
 import { BrandsModule } from './brands/brands.module';
 import { BannersModule } from './banners/banners.module';
 import { CartModule } from './cart/cart.module';
+import { OrderModule } from './order/order.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -69,6 +71,8 @@ import { CartModule } from './cart/cart.module';
     BrandsModule,
     BannersModule,
     CartModule,
+    OrderModule,
+    OrdersModule,
   ],
   providers: [
     {
