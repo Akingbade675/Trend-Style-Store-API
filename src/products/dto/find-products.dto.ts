@@ -1,13 +1,5 @@
-import { Transform } from 'class-transformer';
-import {
-  IsBoolean,
-  IsIn,
-  IsMongoId,
-  IsNumber,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsMongoId, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 // Helper to transform comma-separated strings to array
@@ -42,11 +34,13 @@ export class FindProductsDto extends PaginationDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   minPrice?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   maxPrice?: number;
 
   @IsOptional()
@@ -55,17 +49,11 @@ export class FindProductsDto extends PaginationDto {
 
   @IsOptional()
   @IsBoolean()
+  @Type(() => Boolean)
   isActive?: boolean = true;
 
   @IsOptional()
   @IsString()
-  @IsIn([
-    'price_asc',
-    'price_desc',
-    'name_asc',
-    'name_desc',
-    'createdAt_asc',
-    'createdAt_desc',
-  ]) // Allowed sort values
+  @IsIn(['price_asc', 'price_desc', 'name_asc', 'name_desc', 'createdAt_asc', 'createdAt_desc']) // Allowed sort values
   sortBy?: string = 'createdAt_desc'; // Default sort order
 }

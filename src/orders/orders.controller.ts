@@ -7,14 +7,14 @@ import { Role } from 'src/common/enums/roles-enum';
 import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
-import { OrderService } from './orders.service';
+import { OrdersService } from './orders.service';
 
 @ApiTags('User Orders')
 @ApiBearerAuth()
 @Roles(Role.CUSTOMER)
 @Controller('orders')
-export class OrderController {
-  constructor(private readonly orderService: OrderService) {}
+export class OrdersController {
+  constructor(private readonly orderService: OrdersService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)

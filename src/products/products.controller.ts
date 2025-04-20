@@ -32,19 +32,19 @@ export class ProductsController {
 
   // --- Public Read Endpoints ---
 
-  @Roles(Role.CUSTOMER)
+  @Roles(Role.CUSTOMER, Role.ADMIN)
   @Get()
   async findAll(@Query() findProductsDto: FindProductsDto) {
     return this.productsService.findAll(findProductsDto);
   }
 
-  @Roles(Role.CUSTOMER)
+  @Roles(Role.CUSTOMER, Role.ADMIN)
   @Get(':idOrSlug') // Can accept ID or slug
   findOne(@Param('idOrSlug') idOrSlug: string) {
     return this.productsService.findOne(idOrSlug);
   }
 
-  @Roles(Role.CUSTOMER)
+  @Roles(Role.CUSTOMER, Role.ADMIN)
   @Get(':id/reviews')
   getProductReviews(@Param('id', ParseMongoIdPipe) id: string) {
     return this.productsService.getProductReviews(id);
@@ -64,20 +64,14 @@ export class ProductsController {
   }
 
   @Post(':id/attributes')
-  addAttributes(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() dto: CreateProductAttributesDto,
-  ) {
+  addAttributes(@Param('id', ParseMongoIdPipe) id: string, @Body() dto: CreateProductAttributesDto) {
     return this.productsService.addAttributes(id, dto);
   }
 
   // --- Product Item Endpoints ---
 
   @Post(':id/items')
-  addItems(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() dto: CreateProductItemsDto,
-  ) {
+  addItems(@Param('id', ParseMongoIdPipe) id: string, @Body() dto: CreateProductItemsDto) {
     return this.productsService.addItems(id, dto);
   }
 
@@ -100,72 +94,48 @@ export class ProductsController {
   // --- Product Category Endpoints ---
 
   @Post(':id/categories')
-  addCategories(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() dto: CreateProductCategoriesDto,
-  ) {
+  addCategories(@Param('id', ParseMongoIdPipe) id: string, @Body() dto: CreateProductCategoriesDto) {
     return this.productsService.addCategories(id, dto);
   }
 
   @Patch(':id/categories')
-  updateProductCategories(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() categoryIds: string[],
-  ) {
+  updateProductCategories(@Param('id', ParseMongoIdPipe) id: string, @Body() categoryIds: string[]) {
     return this.productsService.updateProductCategories(id, categoryIds);
   }
 
   // --- Product Image Endpoints ---
 
   @Post(':id/images')
-  addImages(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() dto: CreateProductImagesDto,
-  ) {
+  addImages(@Param('id', ParseMongoIdPipe) id: string, @Body() dto: CreateProductImagesDto) {
     return this.productsService.addImages(id, dto);
   }
 
   @Patch(':id/images')
-  updateProductImages(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() dto: CreateProductImagesDto,
-  ) {
+  updateProductImages(@Param('id', ParseMongoIdPipe) id: string, @Body() dto: CreateProductImagesDto) {
     return this.productsService.updateProductImages(id, dto);
   }
 
   // --- Product Tag Endpoints ---
 
   @Post(':id/tags')
-  addTags(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() dto: CreateProductTagsDto,
-  ) {
+  addTags(@Param('id', ParseMongoIdPipe) id: string, @Body() dto: CreateProductTagsDto) {
     return this.productsService.addTags(id, dto);
   }
 
   @Patch(':id/tags')
-  updateProductTags(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() tagIds: string[],
-  ) {
+  updateProductTags(@Param('id', ParseMongoIdPipe) id: string, @Body() tagIds: string[]) {
     return this.productsService.updateProductTags(id, tagIds);
   }
 
   // --- Featured/Active Status Endpoints ---
 
   @Patch(':id/featured')
-  setFeaturedStatus(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body('isFeatured') isFeatured: boolean,
-  ) {
+  setFeaturedStatus(@Param('id', ParseMongoIdPipe) id: string, @Body('isFeatured') isFeatured: boolean) {
     return this.productsService.setFeaturedStatus(id, isFeatured);
   }
 
   @Patch(':id/active')
-  setActiveStatus(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body('isActive') isActive: boolean,
-  ) {
+  setActiveStatus(@Param('id', ParseMongoIdPipe) id: string, @Body('isActive') isActive: boolean) {
     return this.productsService.setActiveStatus(id, isActive);
   }
 }

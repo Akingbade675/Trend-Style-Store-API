@@ -5,7 +5,6 @@ import {
   Media,
   Product,
   ProductAttribute,
-  ProductImage,
   ProductItem,
   ProductItemAttribute,
 } from '@prisma/client';
@@ -13,10 +12,13 @@ import {
 export type CartWithDetails = Cart & {
   items: (CartItem & {
     productItem: ProductItem & {
-      product: Pick<Product, 'name' | 'slug'>;
-      images: (ProductImage & {
+      product: Pick<Product, 'id' | 'name' | 'slug'>;
+      // images: (ProductImage & {
+      //   image: Pick<Media, 'url' | 'altText'>;
+      // })[];
+      images: {
         image: Pick<Media, 'url' | 'altText'>;
-      })[];
+      }[];
       attributes: (ProductItemAttribute & {
         productAttribute: ProductAttribute & {
           attributeType: Pick<AttributeType, 'name'>;

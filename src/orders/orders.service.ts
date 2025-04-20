@@ -15,8 +15,8 @@ import { OrderStatusEnum } from './enums/order-status.enum';
 import { generateOrderNumber } from './order-number.util';
 
 @Injectable()
-export class OrderService {
-  private readonly logger = new Logger(OrderService.name);
+export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
 
   constructor(
     private readonly prisma: PrismaService,
