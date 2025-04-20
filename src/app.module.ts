@@ -1,3 +1,4 @@
+import { CacheModule } from '@nestjs/cache-manager';
 import { BadRequestException, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
@@ -64,6 +65,7 @@ import { UserModule } from './user/user.module';
       imports: [ConfigModule],
       inject: [ConfigService],
     }),
+    CacheModule.register({ isGlobal: true, ttl: 60000 }),
     // ElasticsearchModule.registerAsync({
     //   imports: [ConfigModule],
     //   useFactory: async (configService: ConfigService) => ({
@@ -80,7 +82,6 @@ import { UserModule } from './user/user.module';
     BrandsModule,
     BannersModule,
     CartModule,
-    OrdersModule,
     OrdersModule,
     SearchModule,
   ],
