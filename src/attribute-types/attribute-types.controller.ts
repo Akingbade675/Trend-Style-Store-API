@@ -1,26 +1,25 @@
 // src/attribute-types/attribute-types.controller.ts
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
-  Query,
-  UseGuards,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { Role } from 'src/common/enums/roles-enum';
+import { RolesGuard } from 'src/common/guards/role.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { ParseMongoIdPipe } from '../common/pipes/parse-mongo-id.pipe';
 import { AttributeTypesService } from './attribute-types.service';
 import { CreateAttributeTypeDto } from './dto/create-attribute-type.dto';
 import { UpdateAttributeTypeDto } from './dto/update-attribute-type.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ParseMongoIdPipe } from '../common/pipes/parse-mongo-id.pipe';
-import { PaginationDto } from '../common/dto/pagination.dto';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { RolesGuard } from 'src/common/guards/role.guard';
-import { Role } from 'src/common/enums/roles-enum';
 
 @UseGuards(RolesGuard)
 @Roles(Role.ADMIN)
@@ -36,7 +35,7 @@ export class AttributeTypesController {
 
   @Get()
   findAll(@Query() paginationDto: PaginationDto) {
-    return this.attributeTypesService.findAll(paginationDto);
+    return this.attributeTypesService.findAll();
   }
 
   @Get(':id')
@@ -45,10 +44,7 @@ export class AttributeTypesController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Body() updateAttributeTypeDto: UpdateAttributeTypeDto,
-  ) {
+  update(@Param('id', ParseMongoIdPipe) id: string, @Body() updateAttributeTypeDto: UpdateAttributeTypeDto) {
     return this.attributeTypesService.update(id, updateAttributeTypeDto);
   }
 

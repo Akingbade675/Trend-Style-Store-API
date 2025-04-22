@@ -1,77 +1,80 @@
 // src/attribute-types/attribute-types.service.ts
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
-  Injectable,
-  NotFoundException,
-  InternalServerErrorException,
   BadRequestException,
-  ConflictException, // Import ConflictException
-  Logger, // Import Logger
+  ConflictException,
+  Inject,
+  Injectable,
+  InternalServerErrorException, // Import ConflictException
+  Logger,
+  NotFoundException,
 } from '@nestjs/common';
+import { AttributeType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service'; // Adjust path
 import { CreateAttributeTypeDto } from './dto/create-attribute-type.dto';
 import { UpdateAttributeTypeDto } from './dto/update-attribute-type.dto';
-import { Prisma, AttributeType } from '@prisma/client';
-import { PaginationDto } from '../common/dto/pagination.dto'; // Adjust path
 
 @Injectable()
 export class AttributeTypesService {
   private readonly logger = new Logger(AttributeTypesService.name);
+  private readonly cacheKey = 'attributeTypes';
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
 
-  async create(
-    createAttributeTypeDto: CreateAttributeTypeDto,
-  ): Promise<AttributeType> {
+  async create(createAttributeTypeDto: CreateAttributeTypeDto): Promise<AttributeType> {
     try {
       const attributeType = await this.prisma.attributeType.create({
         data: createAttributeTypeDto,
       });
-      this.logger.log(
-        `Attribute Type created: ${attributeType.name} (ID: ${attributeType.id})`,
-      );
+
+      await this.invalidateCache();
+
+      this.logger.log(`Attribute Type created: ${attributeType.name} (ID: ${attributeType.id})`);
       return attributeType;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           // Unique constraint violation (likely 'name')
-          throw new ConflictException(
-            `Attribute Type with name "${createAttributeTypeDto.name}" already exists.`,
-          );
+          throw new ConflictException(`Attribute Type with name "${createAttributeTypeDto.name}" already exists.`);
         }
       }
-      this.logger.error(
-        `Failed to create Attribute Type: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        'Could not create attribute type.',
-      );
+      this.logger.error(`Failed to create Attribute Type: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Could not create attribute type.');
     }
   }
 
-  async findAll(
-    paginationDto: PaginationDto,
-  ): Promise<{ data: AttributeType[]; count: number }> {
-    const { page, limit, skip } = paginationDto;
+  private async invalidateCache() {
+    await Promise.all([this.cacheManager.del(this.cacheKey), this.cacheManager.del(`${this.cacheKey}-ids`)]);
+  }
+
+  async findAll(): Promise<{ data: AttributeType[]; count: number }> {
+    const cachedData = await this.cacheManager.get<{ data: AttributeType[]; count: number }>(this.cacheKey);
+
+    if (cachedData) {
+      this.logger.log(`Cache hit for attribute types list: ${this.cacheKey}`);
+      return cachedData;
+    }
 
     try {
-      const [attributeTypes, totalCount] = await Promise.all([
-        this.prisma.attributeType.findMany({
-          skip,
-          take: limit,
-          orderBy: { name: 'asc' }, // Order alphabetically by name
-        }),
+      const [attributeTypes, totalCount] = await this.prisma.$transaction([
+        this.prisma.attributeType.findMany({ orderBy: { name: 'asc' } }),
         this.prisma.attributeType.count(),
       ]);
-      return { count: totalCount, data: attributeTypes };
+      const result = { count: totalCount, data: attributeTypes };
+      await this.cacheManager.set(this.cacheKey, result); // Cache the result object
+      // Cache the ids of the attribute types
+      await this.cacheManager.set(
+        `${this.cacheKey}-ids`,
+        attributeTypes.map((type) => type.id),
+        0, // Never expire
+      );
+      return result;
     } catch (error) {
-      this.logger.error(
-        `Failed to find attribute types: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        'Could not retrieve attribute types.',
-      );
+      this.logger.error(`Failed to find attribute types: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Could not retrieve attribute types.');
     }
   }
 
@@ -86,40 +89,29 @@ export class AttributeTypesService {
     return attributeType;
   }
 
-  async update(
-    id: string,
-    updateAttributeTypeDto: UpdateAttributeTypeDto,
-  ): Promise<AttributeType> {
+  async update(id: string, updateAttributeTypeDto: UpdateAttributeTypeDto): Promise<AttributeType> {
     try {
       const updatedAttributeType = await this.prisma.attributeType.update({
         where: { id },
         data: updateAttributeTypeDto,
       });
-      this.logger.log(
-        `Attribute Type updated: ${updatedAttributeType.name} (ID: ${updatedAttributeType.id})`,
-      );
+
+      await this.invalidateCache();
+
+      this.logger.log(`Attribute Type updated: ${updatedAttributeType.name} (ID: ${updatedAttributeType.id})`);
       return updatedAttributeType;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          throw new ConflictException(
-            `Attribute Type with name "${updateAttributeTypeDto.name}" already exists.`,
-          );
+          throw new ConflictException(`Attribute Type with name "${updateAttributeTypeDto.name}" already exists.`);
         }
         if (error.code === 'P2025') {
           // Should be caught by findOne, but good failsafe
-          throw new NotFoundException(
-            `Attribute Type with ID "${id}" not found during update.`,
-          );
+          throw new NotFoundException(`Attribute Type with ID "${id}" not found during update.`);
         }
       }
-      this.logger.error(
-        `Failed to update Attribute Type ${id}: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        'Could not update attribute type.',
-      );
+      this.logger.error(`Failed to update Attribute Type ${id}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Could not update attribute type.');
     }
   }
 
@@ -143,28 +135,19 @@ export class AttributeTypesService {
       await this.prisma.attributeType.delete({
         where: { id },
       });
-      this.logger.log(
-        `Attribute Type deleted: ${attributeType.name} (ID: ${id})`,
-      );
+
+      await this.invalidateCache();
+
+      this.logger.log(`Attribute Type deleted: ${attributeType.name} (ID: ${id})`);
       return {
         message: `Attribute Type "${attributeType.name}" successfully deleted.`,
       };
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException(
-          `Attribute Type with ID "${id}" not found.`,
-        );
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`Attribute Type with ID "${id}" not found.`);
       }
-      this.logger.error(
-        `Failed to delete Attribute Type ${id}: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException(
-        'Could not delete attribute type.',
-      );
+      this.logger.error(`Failed to delete Attribute Type ${id}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Could not delete attribute type.');
     }
   }
 }
