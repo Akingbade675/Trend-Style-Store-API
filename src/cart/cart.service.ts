@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
@@ -9,8 +10,22 @@ import { CalculatedCart, CartWithDetails, EmptyCart } from './types/cart.type';
 export class CartService {
   // Instantiate Logger with service context
   private readonly logger = new Logger(CartService.name);
+  private readonly cartCachePrefix = 'cart:';
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+  ) {}
+
+  private getCartCacheKey(userId: string): string {
+    return `${this.cartCachePrefix}${userId}`;
+  }
+
+  private async invalidateCartCache(userId: string): Promise<void> {
+    const cacheKey = this.getCartCacheKey(userId);
+    this.logger.log(`[invalidateCartCache] Invalidating cache for key: ${cacheKey}`);
+    await this.cacheManager.del(cacheKey);
+  }
 
   private readonly cartInclude = {
     items: {
@@ -153,23 +168,43 @@ export class CartService {
     });
     this.logger.log(`[addItemToCart] Item ${productItemId} upserted successfully in cart ${cart.id}.`);
 
+    // Invalidate cache *after* successful DB operation
+    await this.invalidateCartCache(userId);
+
     const updatedCart = await this.getCart(userId);
-    return this.calculateCartTotals(updatedCart);
+    return updatedCart;
   }
 
   async getCart(userId: string): Promise<CalculatedCart | EmptyCart> {
+    const cacheKey = this.getCartCacheKey(userId);
     this.logger.log(`[getCart] Attempting to retrieve cart for user: ${userId}`);
+
+    const cachedCart = await this.cacheManager.get<CalculatedCart | EmptyCart>(cacheKey);
+    if (cachedCart) {
+      this.logger.log(`[getCart] Cache hit for user: ${userId}, Cache Key: ${cacheKey}`);
+      return cachedCart;
+    }
+
+    this.logger.log(`[getCart] Cache miss for user: ${userId}, Cache Key: ${cacheKey}. Fetching from DB.`);
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
       include: this.cartInclude,
     });
 
+    let result: CalculatedCart | EmptyCart;
     if (!cart) {
-      this.logger.log(`[getCart] No cart found for user: ${userId}. Returning empty cart structure.`);
-      return { id: null, userId, items: [], subTotal: 0, totalItems: 0, createdAt: null, updatedAt: null };
+      this.logger.log(`[getCart] No cart found for user: ${userId}. Storing empty cart structure.`);
+      result = { id: null, userId, items: [], subTotal: 0, totalItems: 0, createdAt: null, updatedAt: null };
+    } else {
+      this.logger.log(`[getCart] Cart found for user: ${userId}, Cart ID: ${cart.id}. Calculating totals.`);
+      result = this.calculateCartTotals(cart as CartWithDetails);
     }
-    this.logger.log(`[getCart] Cart found for user: ${userId}, Cart ID: ${cart.id}. Calculating totals.`);
-    return this.calculateCartTotals(cart as CartWithDetails);
+
+    // Store the calculated result (or empty structure) in cache
+    await this.cacheManager.set(cacheKey, result);
+    this.logger.log(`[getCart] Stored fetched/calculated cart in cache for key: ${cacheKey}`);
+
+    return result;
   }
 
   async updateCartItem(
@@ -210,13 +245,7 @@ export class CartService {
       this.logger.warn(`[updateCartItem] Cart item ID: ${cartItemId} not found in cart for user: ${userId}.`);
       throw new NotFoundException(`Cart item with ID ${cartItemId} not found in your cart.`);
     }
-    this.logger.log(
-      `[updateCartItem] Cart item ${cartItemId} found (ProductItem ID: ${cartItem.productItemId}). Checking stock.`,
-    );
 
-    this.logger.log(
-      `[updateCartItem] Validating stock for item ${cartItem.productItemId}. Required: ${quantity}, Available: ${cartItem.productItem.stock}`,
-    );
     if (cartItem.productItem.stock < quantity) {
       this.logger.warn(
         `[updateCartItem] Insufficient stock for item ${cartItem.productItemId}. User: ${userId}, Required: ${quantity}, Available: ${cartItem.productItem.stock}`,
@@ -238,9 +267,12 @@ export class CartService {
     });
     this.logger.log(`[updateCartItem] Cart item ${cartItemId} quantity updated successfully.`);
 
+    // Invalidate cache *after* successful DB operation
+    await this.invalidateCartCache(userId);
+
     const updatedCart = await this.getCart(userId);
 
-    return this.calculateCartTotals(updatedCart as CartWithDetails);
+    return updatedCart;
   }
 
   async removeItemFromCart(userId: string, cartItemId: string): Promise<CalculatedCart | EmptyCart> {
@@ -268,17 +300,12 @@ export class CartService {
     this.logger.log(`[removeItemFromCart] Cart item ${cartItemId} deleted successfully.`);
 
     this.logger.log(`[removeItemFromCart] Checking state of cart ${itemToDelete.cartId} after item removal.`);
-    const updatedCart = await this.prisma.cart.findUnique({
-      where: { id: itemToDelete.cartId },
-      include: this.cartInclude,
-    });
 
-    if (!updatedCart || updatedCart.items.length === 0) {
-      return { id: null, userId, items: [], subTotal: 0, totalItems: 0, createdAt: null, updatedAt: null };
-    }
+    // Invalidate cache *after* successful DB operation
+    await this.invalidateCartCache(userId);
 
-    this.logger.log(`[removeItemFromCart] Cart ${itemToDelete.cartId} still contains items. Calculating totals.`);
-    return this.calculateCartTotals(updatedCart as CartWithDetails);
+    const updatedCart = await this.getCart(userId);
+    return updatedCart;
   }
 
   async clearCart(userId: string): Promise<EmptyCart> {
@@ -290,6 +317,8 @@ export class CartService {
 
     if (!cart) {
       this.logger.log(`[clearCart] No cart found for user: ${userId}. Nothing to clear.`);
+      // Cache might contain an old (now incorrect) empty cart state, invalidate just in case
+      await this.invalidateCartCache(userId);
       return { id: null, userId, items: [], subTotal: 0, totalItems: 0, createdAt: null, updatedAt: null };
     }
     this.logger.log(`[clearCart] Found cart ID: ${cart.id} for user: ${userId}. Deleting all items.`);
@@ -302,6 +331,9 @@ export class CartService {
     // Delete the cart itself after clearing items
     this.logger.log(`[clearCart] Deleting the empty cart record ID: ${cart.id}.`);
     await this.prisma.cart.delete({ where: { id: cart.id } });
+
+    // Invalidate cache *after* successful DB operations
+    await this.invalidateCartCache(userId);
 
     this.logger.log(`[clearCart] Cart cleared successfully for user: ${userId}. Returning empty structure.`);
     return { id: null, userId, items: [], subTotal: 0, totalItems: 0, createdAt: null, updatedAt: null };
